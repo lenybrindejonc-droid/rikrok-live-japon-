@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Live Japon">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icone-192.png">
+<link rel="apple-touch-icon" href="icone-192.png">
+<title>Live Japon Caché</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Inter:wght@400;600;800&display=swap">
+<style>
+/* Plateau 9:16 plein écran : décor animé en canvas, carte du mot au centre, bandeaux haut/bas. */
+:root{
+  --nuit:#0b1020; --encre:#f4f6fb; --brume:#b9c3dc; --lanterne:#ffb547; --torii:#e0483a; --verre:rgba(10,14,30,.55);
+  --f-mot:"M PLUS Rounded 1c","Arial Rounded MT Bold",system-ui,sans-serif;
+  --f-texte:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%;margin:0;background:var(--nuit);color:var(--encre);font-family:var(--f-texte);overflow:hidden}
+#scene{position:fixed;inset:0;width:100%;height:100%;display:block}
+.plateau{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:space-between;align-items:center;
+  padding-top:calc(env(safe-area-inset-top,0px) + 4vh);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 4vh);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));box-sizing:border-box;pointer-events:none}
+.haut{text-align:center;display:flex;flex-direction:column;gap:.6vh;align-items:center}
+.serie{font-weight:800;letter-spacing:.22em;font-size:clamp(12px,1.8vh,18px);color:var(--brume);text-transform:uppercase}
+.live{display:inline-flex;gap:.5em;align-items:center;font-weight:800;font-size:clamp(14px,2.2vh,22px);letter-spacing:.06em}
+.live i{width:.6em;height:.6em;border-radius:50%;background:var(--torii);box-shadow:0 0 10px var(--torii);animation:pulse 1.6s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.compteur{font-size:clamp(12px,1.7vh,17px);color:var(--brume);font-variant-numeric:tabular-nums}
+
+.carte{width:min(92vw,560px);text-align:center;display:flex;flex-direction:column;gap:1.6vh;align-items:center;
+  padding:3.5vh 4vw;border-radius:28px;background:var(--verre);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  border:1px solid rgba(255,255,255,.12);box-sizing:border-box;transition:transform .6s,opacity .6s}
+.carte.sort{opacity:0;transform:translateY(20px) scale(.97)}
+.etiquette{font-weight:800;font-size:clamp(12px,1.9vh,19px);letter-spacing:.16em;text-transform:uppercase;color:var(--lanterne)}
+.mot{font-family:var(--f-mot);font-weight:800;font-size:clamp(44px,9vh,104px);line-height:1.02;text-wrap:balance;
+  text-shadow:0 4px 0 rgba(0,0,0,.45),0 0 30px rgba(255,181,71,.25);overflow-wrap:anywhere}
+.sens{font-weight:800;font-size:clamp(24px,4.4vh,48px);line-height:1.15;text-wrap:balance;min-height:1.2em;transition:opacity .5s,filter .5s}
+.sens.cache{opacity:0;filter:blur(8px)}
+.astuce{font-size:clamp(15px,2.3vh,24px);line-height:1.35;color:var(--brume);max-width:30ch;min-height:2.7em;transition:opacity .6s}
+.astuce.cache{opacity:0}
+.chrono{font-family:var(--f-mot);font-weight:800;font-size:clamp(40px,8vh,90px);color:var(--lanterne);font-variant-numeric:tabular-nums}
+
+.bas{width:100%;display:flex;flex-direction:column;gap:1.2vh;align-items:center}
+.appel{font-weight:800;font-size:clamp(16px,2.6vh,26px);text-align:center;text-wrap:balance;padding:.55em 1em;border-radius:999px;
+  background:rgba(255,255,255,.92);color:#151a2c;max-width:92vw;transition:opacity .5s}
+.barre{width:min(80vw,420px);height:6px;border-radius:6px;background:rgba(255,255,255,.18);overflow:hidden}
+.barre b{display:block;height:100%;width:0;background:var(--lanterne)}
+
+/* Écran de lancement */
+.lancement{position:fixed;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;background:rgba(6,9,20,.82);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));box-sizing:border-box}
+.boite{max-width:440px;width:100%;display:flex;flex-direction:column;gap:14px;font-size:15px;line-height:1.45}
+.boite h1{font-family:var(--f-mot);font-size:28px;margin:0;text-wrap:balance}
+.boite p{margin:0;color:var(--brume)}
+.boite label{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.1)}
+.boite select,.boite input{font:inherit;color:var(--encre);background:#1a2140;border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:6px 8px}
+.go{font:800 18px var(--f-texte);color:#151a2c;background:var(--lanterne);border:0;border-radius:14px;padding:14px;cursor:pointer}
+.go:focus-visible,.boite select:focus-visible,.boite input:focus-visible{outline:3px solid var(--encre);outline-offset:2px}
+.note{font-size:13px}
+[hidden]{display:none!important}
+.pause{position:fixed;z-index:4;right:max(12px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 12px);
+  font:600 12px var(--f-texte);color:var(--brume);opacity:.0;pointer-events:none;transition:opacity .3s}
+.pause.vue{opacity:.9}
+@media (prefers-reduced-motion:reduce){.live i{animation:none}.carte{transition:none}}
+</style>
+
+</head>
+<body>
+<canvas id="scene" aria-hidden="true"></canvas>
+
+<div class="plateau" aria-live="polite">
+  <div class="haut">
+    <div class="serie">Japon caché · cours en direct</div>
+    <div class="live"><i></i>Apprends le japonais avec moi</div>
+    <div class="compteur" id="compteur">Mot 1</div>
+  </div>
+
+  <div class="carte" id="carte">
+    <div class="etiquette" id="etiquette">Mot du moment</div>
+    <div class="mot" id="mot">Konnichiwa</div>
+    <div class="sens" id="sens">Bonjour</div>
+    <div class="astuce" id="astuce">Le « bonjour » de la journée, à tout le monde.</div>
+  </div>
+
+  <div class="bas">
+    <div class="appel" id="appel">Écris le mot en commentaire pour le retenir</div>
+    <div class="barre"><b id="barre"></b></div>
+  </div>
+</div>
+
+<div class="pause" id="pause">Pause · touche pour reprendre</div>
+
+<div class="lancement" id="lancement">
+  <form class="boite" id="reglages">
+    <h1>Live « Apprends le japonais »</h1>
+    <p>La page tourne toute seule : un mot, sa prononciation, sa traduction, et un quiz tous les 5 mots.</p>
+    <label for="voix">Voix (Nicolas + japonais natif) <select id="voix"><option value="1">Oui</option><option value="0">Non</option></select></label>
+    <label for="vitesse">Rythme <select id="vitesse"><option value="1">Normal</option><option value="1.4">Calme</option><option value="0.75">Rapide</option></select></label>
+    <label for="musique">Musique koto <select id="musique"><option value="1">Oui</option><option value="0">Non</option></select></label>
+    <button class="go" id="go" type="submit">Lancer le live</button>
+    <p class="note">Pendant le live, touche l'écran pour mettre en pause ou reprendre.</p>
+  </form>
+</div>
+
+<script>
+// Le japonais est prononcé à partir des kana (jamais affichés) : la voix les lit correctement.
+const MOTS=[{"id": "konnichiwa", "romaji": "Konnichiwa", "kana": "こんにちは", "fr": "Bonjour", "astuce": "Le « bonjour » de la journée, à tout le monde."}, {"id": "ohayo", "romaji": "Ohayō gozaimasu", "kana": "おはようございます", "fr": "Bonjour (le matin)", "astuce": "Version polie. Entre amis : juste « ohayō »."}, {"id": "konbanwa", "romaji": "Konbanwa", "kana": "こんばんは", "fr": "Bonsoir", "astuce": "À partir de la fin de journée."}, {"id": "arigato", "romaji": "Arigatō", "kana": "ありがとう", "fr": "Merci", "astuce": "Plus poli : « arigatō gozaimasu »."}, {"id": "sumimasen", "romaji": "Sumimasen", "kana": "すみません", "fr": "Excusez-moi", "astuce": "Pour appeler un serveur, ou s'excuser."}, {"id": "hai", "romaji": "Hai", "kana": "はい", "fr": "Oui", "astuce": "Tu l'entendras partout, tout le temps."}, {"id": "iie", "romaji": "Iie", "kana": "いいえ", "fr": "Non", "astuce": "Souvent remplacé par un geste de la main."}, {"id": "onegaishimasu", "romaji": "Onegaishimasu", "kana": "おねがいします", "fr": "S'il vous plaît", "astuce": "Pour demander quelque chose poliment."}, {"id": "hajimemashite", "romaji": "Hajimemashite", "kana": "はじめまして", "fr": "Enchanté", "astuce": "Quand tu rencontres quelqu'un pour la 1re fois."}, {"id": "sayonara", "romaji": "Sayōnara", "kana": "さようなら", "fr": "Au revoir", "astuce": "Assez formel : entre amis, on dit « mata ne »."}, {"id": "matane", "romaji": "Mata ne", "kana": "またね", "fr": "À plus !", "astuce": "L'au revoir entre amis."}, {"id": "oyasumi", "romaji": "Oyasumi", "kana": "おやすみ", "fr": "Bonne nuit", "astuce": "Avant d'aller dormir."}, {"id": "itadakimasu", "romaji": "Itadakimasu", "kana": "いただきます", "fr": "Bon appétit", "astuce": "On le dit juste avant de manger."}, {"id": "gochisosama", "romaji": "Gochisōsama", "kana": "ごちそうさま", "fr": "Merci pour le repas", "astuce": "On le dit à la fin du repas."}, {"id": "oishii", "romaji": "Oishii", "kana": "おいしい", "fr": "C'est délicieux", "astuce": "Le mot préféré au restaurant."}, {"id": "daijobu", "romaji": "Daijōbu", "kana": "だいじょうぶ", "fr": "Ça va / pas de souci", "astuce": "Marche en question et en réponse."}, {"id": "sugoi", "romaji": "Sugoi", "kana": "すごい", "fr": "Incroyable", "astuce": "Pour tout ce qui t'impressionne."}, {"id": "kawaii", "romaji": "Kawaii", "kana": "かわいい", "fr": "Mignon", "astuce": "Oui, le mot vient bien de là."}, {"id": "kirei", "romaji": "Kirei", "kana": "きれい", "fr": "Beau / propre", "astuce": "Pour un paysage, ou une rue impeccable."}, {"id": "ikura", "romaji": "Ikura desu ka ?", "kana": "いくらですか", "fr": "C'est combien ?", "astuce": "Utile dans les petites boutiques."}, {"id": "toire", "romaji": "Toire wa doko desu ka ?", "kana": "トイレはどこですか", "fr": "Où sont les toilettes ?", "astuce": "La phrase qui sauve en voyage."}, {"id": "eki", "romaji": "Eki", "kana": "えき", "fr": "La gare", "astuce": "Cherche ce mot sur les panneaux."}, {"id": "densha", "romaji": "Densha", "kana": "でんしゃ", "fr": "Le train", "astuce": "Le moyen de voyager au Japon."}, {"id": "mizu", "romaji": "Mizu", "kana": "みず", "fr": "L'eau", "astuce": "Au restaurant, elle est souvent offerte."}, {"id": "ocha", "romaji": "Ocha", "kana": "おちゃ", "fr": "Le thé", "astuce": "Souvent du thé vert."}, {"id": "gohan", "romaji": "Gohan", "kana": "ごはん", "fr": "Le riz / le repas", "astuce": "Le même mot pour les deux."}, {"id": "onsen", "romaji": "Onsen", "kana": "おんせん", "fr": "Source chaude", "astuce": "Le bain chaud naturel japonais."}, {"id": "yuki", "romaji": "Yuki", "kana": "ゆき", "fr": "La neige", "astuce": "Comme dans les villages de montagne en hiver."}, {"id": "samui", "romaji": "Samui", "kana": "さむい", "fr": "Il fait froid", "astuce": "Le mot de l'hiver japonais."}, {"id": "atsui", "romaji": "Atsui", "kana": "あつい", "fr": "Il fait chaud", "astuce": "Le mot de l'été japonais."}, {"id": "yama", "romaji": "Yama", "kana": "やま", "fr": "La montagne", "astuce": "Fuji-san, c'est le mont Fuji."}, {"id": "kawa", "romaji": "Kawa", "kana": "かわ", "fr": "La rivière", "astuce": "On le retrouve dans plein de noms de villes."}, {"id": "taki", "romaji": "Taki", "kana": "たき", "fr": "La cascade", "astuce": "Beaucoup sont sacrées au Japon."}, {"id": "mori", "romaji": "Mori", "kana": "もり", "fr": "La forêt", "astuce": "Les sanctuaires sont souvent dans la forêt."}, {"id": "jinja", "romaji": "Jinja", "kana": "じんじゃ", "fr": "Sanctuaire shinto", "astuce": "Reconnaissable à son portail, le torii."}, {"id": "tera", "romaji": "Tera", "kana": "てら", "fr": "Temple bouddhiste", "astuce": "On dit souvent « o-tera »."}, {"id": "torii", "romaji": "Torii", "kana": "とりい", "fr": "Portail de sanctuaire", "astuce": "Il marque l'entrée dans un lieu sacré."}, {"id": "sakura", "romaji": "Sakura", "kana": "さくら", "fr": "Cerisier en fleurs", "astuce": "La floraison arrive au printemps."}, {"id": "tsuki", "romaji": "Tsuki", "kana": "つき", "fr": "La lune", "astuce": "Au Japon, on admire la lune en automne."}, {"id": "hoshi", "romaji": "Hoshi", "kana": "ほし", "fr": "L'étoile", "astuce": "À voir loin des grandes villes."}, {"id": "neko", "romaji": "Neko", "kana": "ねこ", "fr": "Le chat", "astuce": "Le Japon a même des îles aux chats."}, {"id": "inu", "romaji": "Inu", "kana": "いぬ", "fr": "Le chien", "astuce": "Et le chiot se dit « koinu »."}, {"id": "tomodachi", "romaji": "Tomodachi", "kana": "ともだち", "fr": "Ami", "astuce": "Un mot à garder pour la vie."}, {"id": "ichinisan", "romaji": "Ichi, ni, san", "kana": "いち、に、さん", "fr": "Un, deux, trois", "astuce": "Pour compter jusqu'à trois."}, {"id": "yongo", "romaji": "Yon, go", "kana": "よん、ご", "fr": "Quatre, cinq", "astuce": "Quatre peut aussi se dire « shi »."}];
+const APPELS=["Écris le mot en commentaire pour le retenir","Abonne-toi : un nouveau mot chaque jour","Partage le live à ton futur compagnon de voyage","Quel mot tu veux apprendre ? Dis-le en commentaire","Tu le savais déjà ? Écris « oui » ou « non »"];
+
+const $=id=>document.getElementById(id);
+const attendre=ms=>new Promise(r=>setTimeout(r,ms*reg.rythme));
+let reg={voix:true,rythme:1,musique:true},enPause=false,attentePause=null;
+
+// ---------- Voix ElevenLabs : Nicolas (français, avec émotions) + Taka (japonais natif) ----------
+let audioEnCours=null;
+function jouer(nom){
+  if(!reg.voix)return attendre(1600);
+  return new Promise(res=>{
+    const a=new Audio(`voix/${nom}.mp3`);audioEnCours=a;
+    const fin=()=>{clearTimeout(t);audioEnCours=null;if(musique)musique.baisser(false);setTimeout(res,200)};
+    const t=setTimeout(fin,20000);
+    a.onended=fin;a.onerror=fin;
+    if(musique)musique.baisser(true);
+    a.play().catch(fin);
+  });
+}
+
+// ---------- Musique koto synthétisée (gamme pentatonique in) ----------
+let musique=null;
+function creerMusique(){
+  const ac=new (window.AudioContext||window.webkitAudioContext)();
+  const maitre=ac.createGain();maitre.gain.value=.16;maitre.connect(ac.destination);
+  const echo=ac.createDelay();echo.delayTime.value=.42;const retour=ac.createGain();retour.gain.value=.32;
+  echo.connect(retour);retour.connect(echo);echo.connect(maitre);
+  const gamme=[220,233.08,293.66,329.63,349.23,440,466.16,587.33,659.25];
+  function note(f,t,fort){
+    const o=ac.createOscillator(),o2=ac.createOscillator(),g=ac.createGain();
+    o.type="triangle";o.frequency.value=f;o2.type="sine";o2.frequency.value=f*2;
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(fort,t+.008);g.gain.exponentialRampToValueAtTime(.0008,t+2.6);
+    o.connect(g);o2.connect(g);g.connect(maitre);g.connect(echo);o.start(t);o2.start(t);o.stop(t+2.7);o2.stop(t+2.7);
+  }
+  let prochain=ac.currentTime+.2,idx=4;
+  setInterval(()=>{
+    while(prochain<ac.currentTime+1.5){
+      if(Math.random()<.72){idx=Math.max(0,Math.min(gamme.length-1,idx+[-2,-1,1,2,0][Math.floor(Math.random()*5)]));note(gamme[idx],prochain,.5)}
+      if(Math.random()<.12)note(gamme[idx]/2,prochain,.35);
+      prochain+=[.6,.9,1.2,1.8][Math.floor(Math.random()*4)];
+    }
+  },300);
+  return{ac,baisser(b){maitre.gain.setTargetAtTime(b?.05:.16,ac.currentTime,.25)}};
+}
+
+// ---------- Décor : nuit d'hiver, montagnes, torii, lanternes, neige ----------
+const cv=$("scene"),cx=cv.getContext("2d");let W,H,flocons=[],t0=performance.now();
+const AMBIANCES=[
+  {ciel:["#0b1020","#1d2a52","#3a3f6e"],mont:["#1b2347","#141a36","#0c1128"],neige:1},
+  {ciel:["#2a1631","#6b2f4a","#d07a58"],mont:["#3a1d35","#2a1428","#1a0c1a"],neige:.35},
+  {ciel:["#07161a","#12352f","#2c5a48"],mont:["#0f2a25","#0a1f1b","#061411"],neige:.15}
+];
+function taille(){W=cv.width=innerWidth*devicePixelRatio;H=cv.height=innerHeight*devicePixelRatio;
+  flocons=Array.from({length:160},()=>({x:Math.random()*W,y:Math.random()*H,r:(Math.random()*2.2+.6)*devicePixelRatio,v:Math.random()*.6+.25,o:Math.random()*6}))}
+addEventListener("resize",taille);taille();
+function montagne(base,amp,freq,graine,couleur,dx){
+  cx.fillStyle=couleur;cx.beginPath();cx.moveTo(0,H);
+  for(let x=0;x<=W;x+=W/80){const u=(x+dx)/W;cx.lineTo(x,base-amp*(.55*Math.sin(u*freq+graine)+.3*Math.sin(u*freq*2.3+graine*2)+.15*Math.sin(u*freq*5.1)))}
+  cx.lineTo(W,H);cx.fill();
+}
+function melange(a,b,k){const p=s=>[1,3,5].map(i=>parseInt(s.slice(i,i+2),16));const A=p(a),B=p(b);return`rgb(${A.map((v,i)=>Math.round(v+(B[i]-v)*k)).join(",")})`}
+function dessiner(now){
+  const t=Math.max(0,now-t0)/1000,cycle=t/240,i=Math.floor(cycle)%3,j=(i+1)%3,k=Math.max(0,(cycle%1-.85)/.15);
+  const A=AMBIANCES[i],B=AMBIANCES[j],c=n=>melange(A.ciel[n],B.ciel[n],k),m=n=>melange(A.mont[n],B.mont[n],k);
+  const g=cx.createLinearGradient(0,0,0,H);g.addColorStop(0,c(0));g.addColorStop(.6,c(1));g.addColorStop(1,c(2));cx.fillStyle=g;cx.fillRect(0,0,W,H);
+  // lune
+  cx.fillStyle="rgba(255,244,220,.85)";cx.beginPath();cx.arc(W*.78,H*.16,Math.min(W,H)*.045,0,7);cx.fill();
+  cx.fillStyle="rgba(255,244,220,.08)";cx.beginPath();cx.arc(W*.78,H*.16,Math.min(W,H)*.11,0,7);cx.fill();
+  const d=t*6*devicePixelRatio;
+  montagne(H*.62,H*.12,5,1,m(0),d*.3);montagne(H*.72,H*.09,7,4,m(1),d*.6);
+  // torii
+  const tx=W*.5+Math.sin(t/40)*W*.03,ty=H*.8,s=Math.min(W,H)*.2;
+  cx.fillStyle="rgba(140,30,28,.85)";
+  cx.fillRect(tx-s*.42,ty-s*.9,s*.07,s*.95);cx.fillRect(tx+s*.35,ty-s*.9,s*.07,s*.95);
+  cx.fillRect(tx-s*.5,ty-s*.72,s*1.0,s*.06);
+  cx.beginPath();cx.moveTo(tx-s*.62,ty-s*.98);cx.quadraticCurveTo(tx,ty-s*.88,tx+s*.62,ty-s*.98);cx.lineTo(tx+s*.58,ty-s*.9);cx.quadraticCurveTo(tx,ty-s*.8,tx-s*.58,ty-s*.9);cx.fill();
+  montagne(H*.86,H*.05,9,7,m(2),d);
+  // lanternes
+  for(let n=0;n<6;n++){const lx=W*(.08+n*.168),ly=H*.9+Math.sin(t*1.2+n)*4*devicePixelRatio,r=Math.min(W,H)*.018;
+    const h=cx.createRadialGradient(lx,ly,0,lx,ly,r*5);h.addColorStop(0,"rgba(255,181,71,.45)");h.addColorStop(1,"rgba(255,181,71,0)");
+    cx.fillStyle=h;cx.fillRect(lx-r*5,ly-r*5,r*10,r*10);cx.fillStyle="#ffb547";cx.beginPath();cx.ellipse(lx,ly,r,r*1.3,0,0,7);cx.fill()}
+  // neige
+  const dens=A.neige+(B.neige-A.neige)*k;
+  cx.fillStyle="rgba(255,255,255,.85)";
+  flocons.forEach((f,n)=>{if(n/flocons.length>dens)return;f.y+=f.v*devicePixelRatio;f.x+=Math.sin(t+f.o)*.4;if(f.y>H){f.y=-5;f.x=Math.random()*W}
+    cx.beginPath();cx.arc(f.x,f.y,f.r,0,7);cx.fill()});
+  requestAnimationFrame(dessiner);
+}
+requestAnimationFrame(dessiner);
+
+// ---------- Déroulé du cours ----------
+function melanger(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+let ordre=melanger(MOTS.map((_,i)=>i)),pos=0,vus=[],total=0;
+try{const s=JSON.parse(localStorage.getItem("live-japon")||"null");if(s&&s.ordre&&s.ordre.length===MOTS.length){ordre=s.ordre;pos=s.pos%MOTS.length;total=s.total||0}}catch(e){}
+function sauver(){try{localStorage.setItem("live-japon",JSON.stringify({ordre,pos,total}))}catch(e){}}
+
+async function pausePossible(){while(enPause)await new Promise(r=>attentePause=r)}
+async function barre(sec){const b=$("barre");b.style.transition="none";b.style.width="0";b.offsetWidth;b.style.transition=`width ${sec*reg.rythme}s linear`;b.style.width="100%"}
+function ajuster(){const m=$("mot"),n=m.textContent.length;m.style.fontSize=n>16?"clamp(30px,5.2vh,60px)":n>10?"clamp(36px,6.5vh,76px)":""}
+async function changer(fn){const c=$("carte");c.classList.add("sort");await attendre(600);fn();ajuster();c.classList.remove("sort");await attendre(400)}
+
+async function leçon(i){
+  const {id,romaji,fr,astuce}=MOTS[i];total++;
+  $("compteur").textContent=`Mot ${total}`;
+  await changer(()=>{$("etiquette").textContent="Mot du moment";$("mot").textContent=romaji;$("sens").textContent=fr;$("sens").classList.add("cache");
+    $("astuce").textContent=astuce;$("astuce").classList.add("cache");$("chrono")?.remove()});
+  // 1) le mot, 2) « répète avec moi », 3) le mot encore, 4) compte à rebours : la traduction arrive ~13 s après le mot
+  const debut=performance.now();barre(13);
+  await attendre(500);await jouer(id+"-ja");await attendre(1500);
+  await pausePossible();await jouer("repete"+(1+total%4));await attendre(900);
+  await jouer(id+"-ja");
+  const reste=Math.ceil(13-(performance.now()-debut)/1000/reg.rythme);
+  if(reste>0){
+    $("etiquette").textContent="Traduction dans…";
+    const ch=document.createElement("div");ch.className="chrono";ch.id="chrono";$("carte").appendChild(ch);
+    for(let s=reste;s>0;s--){await pausePossible();ch.textContent=s;await attendre(1000)}
+    ch.remove();$("etiquette").textContent="Mot du moment";
+  }
+  $("sens").classList.remove("cache");setTimeout(()=>$("astuce").classList.remove("cache"),1800);
+  await jouer(id+"-fr");await attendre(3500);
+  vus.push(i);
+}
+async function quiz(){
+  const {id,romaji,fr}=MOTS[vus[Math.floor(Math.random()*vus.length)]];
+  await changer(()=>{$("etiquette").textContent="Quiz · réponds en commentaire";
+    $("mot").textContent=romaji;$("sens").textContent=fr;$("sens").classList.add("cache");
+    $("astuce").textContent="Ça veut dire quoi ?";$("astuce").classList.remove("cache");
+    const ch=document.createElement("div");ch.className="chrono";ch.id="chrono";$("carte").appendChild(ch)});
+  await jouer("quiz");await jouer(id+"-ja");
+  barre(12);
+  for(let s=12;s>0;s--){await pausePossible();$("chrono").textContent=s;await attendre(1000)}
+  $("chrono").remove();$("astuce").textContent="La réponse :";
+  await jouer("reponse");$("sens").classList.remove("cache");await jouer(id+"-fr");
+  await attendre(2500);
+}
+async function boucle(){
+  let n=0;
+  for(;;){
+    await pausePossible();
+    if(n%3===0)$("appel").textContent=APPELS[(n/3)%APPELS.length];
+    if(n%7===0)await jouer("accueil"+(1+(n/7)%3));
+    await leçon(ordre[pos]);pos++;n++;
+    if(pos>=ordre.length){ordre=melanger(ordre);pos=0}
+    sauver();
+    if(n%5===0){await pausePossible();await quiz()}
+  }
+}
+
+// ---------- Lancement ----------
+$("reglages").addEventListener("submit",async e=>{
+  e.preventDefault();
+  reg={voix:$("voix").value==="1",rythme:parseFloat($("vitesse").value),musique:$("musique").value==="1"};
+  // Le son d'abord, tant que le navigateur autorise encore l'audio (le plein écran consomme cette autorisation).
+  if(reg.musique){try{musique=creerMusique();musique.ac.resume()}catch(e){}}
+  $("lancement").hidden=true;
+  try{document.documentElement.requestFullscreen?.().catch(()=>{})}catch(e){}
+  try{navigator.wakeLock?.request("screen").catch(()=>{})}catch(e){}
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)navigator.wakeLock?.request("screen").catch(()=>{})});
+  document.addEventListener("click",()=>{
+    if(!enPause&&musique&&musique.ac.state!=="running"){musique.ac.resume();return}
+    enPause=!enPause;$("pause").classList.toggle("vue",enPause);
+    if(enPause){audioEnCours?.pause();musique?.ac.suspend()}else{audioEnCours?.play().catch(()=>{});musique?.ac.resume();attentePause?.()}});
+  boucle();
+});
+</script>
+
+</body>
+</html>
