@@ -69,6 +69,7 @@ html,body{height:100%;margin:0;background:var(--nuit);color:var(--encre);font-fa
 .pause{position:fixed;z-index:4;right:max(12px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 12px);
   font:600 12px var(--f-texte);color:var(--brume);opacity:.0;pointer-events:none;transition:opacity .3s}
 .pause.vue{opacity:.9}
+.sonCoupe{position:fixed;z-index:6;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 40%);font:800 20px var(--f-texte);background:var(--torii);color:#fff;padding:14px 22px;border-radius:999px;white-space:nowrap}
 @media (prefers-reduced-motion:reduce){.live i{animation:none}.carte{transition:none}}
 </style>
 
@@ -96,6 +97,7 @@ html,body{height:100%;margin:0;background:var(--nuit);color:var(--encre);font-fa
   </div>
 </div>
 
+<div class="sonCoupe" id="sonCoupe" hidden>🔇 Touche l'écran pour remettre le son</div>
 <div class="pause" id="pause">Pause · touche pour reprendre</div>
 
 <div class="lancement" id="lancement">
@@ -129,9 +131,19 @@ function jouer(nom){
     const t=setTimeout(fin,20000);
     a.onended=fin;a.onerror=fin;
     if(musique)musique.baisser(true);
-    a.play().catch(fin);
+    a.play().catch(()=>sonBloque(()=>a.play().catch(fin)));
   });
 }
+// iPhone : quand TikTok démarre la diffusion, il coupe le son des autres applis. On le relance au retour sur la page,
+// sinon on demande une touche (le navigateur n'autorise le son qu'après un geste).
+let aRelancer=null;
+function sonBloque(relance){aRelancer=relance;$("sonCoupe").hidden=false}
+function remettreSon(){
+  musique?.ac.resume();
+  if(audioEnCours&&audioEnCours.paused&&!enPause)audioEnCours.play().catch(()=>{});
+}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&!enPause)remettreSon()});
+setInterval(()=>{if(!enPause&&musique&&musique.ac.state!=="running")musique.ac.resume().catch(()=>$("sonCoupe").hidden=false)},3000);
 
 // ---------- Musique koto synthétisée (gamme pentatonique in) ----------
 let musique=null;
@@ -272,6 +284,7 @@ $("reglages").addEventListener("submit",async e=>{
   try{navigator.wakeLock?.request("screen").catch(()=>{})}catch(e){}
   document.addEventListener("visibilitychange",()=>{if(!document.hidden)navigator.wakeLock?.request("screen").catch(()=>{})});
   document.addEventListener("click",()=>{
+    if(!$("sonCoupe").hidden){$("sonCoupe").hidden=true;remettreSon();const r=aRelancer;aRelancer=null;r?.();return}
     if(!enPause&&musique&&musique.ac.state!=="running"){musique.ac.resume();return}
     enPause=!enPause;$("pause").classList.toggle("vue",enPause);
     if(enPause){audioEnCours?.pause();musique?.ac.suspend()}else{audioEnCours?.play().catch(()=>{});musique?.ac.resume();attentePause?.()}});
